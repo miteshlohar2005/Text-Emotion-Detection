@@ -1,0 +1,79 @@
+{% extends 'base.html' %} {% block head %}
+<title>Text Emotion Detection</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}" />
+{% endblock %} {% block body %}
+<main class="container">
+  <section class="detector-card" aria-labelledby="page-title">
+    <p class="eyebrow">AI-powered text analysis</p>
+    <h1 id="page-title">Text Emotion Detection</h1>
+    <p class="subtitle">Discover the emotions expressed in your text using AI.</p>
+
+    <form method="post" action="{{ url_for('predict') }}" id="prediction-form">
+      <label for="textfield">Your text</label>
+      <textarea
+        id="textfield"
+        name="textfield"
+        placeholder="Enter your text here..."
+        rows="7"
+        required
+      >{{ text or "" }}</textarea>
+      <div class="form-actions">
+        <button type="submit" class="primary-button" id="predict-button">
+          Predict Emotion
+        </button>
+        <button type="button" class="secondary-button" id="clear-button">Clear</button>
+      </div>
+      <p class="loading" id="loading-message" aria-live="polite" hidden>
+        Analyzing your text...
+      </p>
+    </form>
+
+    {% if error %}
+    <div class="message error-message" role="alert">{{ error }}</div>
+    {% endif %}
+
+    {% if result %}
+    <section class="result-card" aria-live="polite" aria-labelledby="result-title">
+      <p class="eyebrow">Prediction result</p>
+      <h2 id="result-title">{{ result.label }}</h2>
+      {% if result.confidence is not none %}
+      <p class="confidence">Model confidence: <strong>{{ "%.2f"|format(result.confidence) }}%</strong></p>
+      {% endif %}
+      <div class="scores">
+        {% for score in result.scores %}
+        <div class="score-row">
+          <span>{{ score.emotion }}</span>
+          <span>{{ "%.2f"|format(score.score) }}%</span>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+  </section>
+</main>
+<script>
+  const form = document.getElementById("prediction-form");
+  const input = document.getElementById("textfield");
+  const clearButton = document.getElementById("clear-button");
+  const loadingMessage = document.getElementById("loading-message");
+  const resultCard = document.querySelector(".result-card");
+  const errorMessage = document.querySelector(".error-message");
+
+  form.addEventListener("submit", (event) => {
+    if (!input.value.trim()) {
+      event.preventDefault();
+      input.focus();
+      return;
+    }
+    loadingMessage.hidden = false;
+  });
+
+  clearButton.addEventListener("click", () => {
+    input.value = "";
+    loadingMessage.hidden = true;
+    if (resultCard) resultCard.remove();
+    if (errorMessage) errorMessage.remove();
+    input.focus();
+  });
+</script>
+{% endblock %}

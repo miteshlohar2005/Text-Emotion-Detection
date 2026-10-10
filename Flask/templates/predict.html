@@ -1,0 +1,33 @@
+{% extends 'base.html' %} {% block head %}
+<title>Emotion Detector</title>
+<link
+  rel="stylesheet"
+  href="{{ url_for('static',filename='css/predict.css') }}"
+/>
+{% endblock %} {% block body %}
+<div class="container">
+  <div class="wrapper">
+    <div class="title">Emotion Detector</div>
+    <div class="form">
+      <form action="{{url_for('predict')}}" method="post">
+        <div class="text-input">
+          <input
+            type="text"
+            required
+            placeholder="Enter the text you want to analyze/predict."
+            name="textfield"
+            autocomplete="off"
+            value="{{message}}"
+          />
+        </div>
+        <div class="submit-button"><button type="submit">Analyze</button></div>
+      </form>
+    </div>
+    <div class="text-box">
+      {% for emotion in emotions %}
+            <div class = "text"> {{emotion}} </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

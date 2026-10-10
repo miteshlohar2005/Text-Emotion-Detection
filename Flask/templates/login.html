@@ -1,0 +1,79 @@
+{% extends 'base.html' %} {% block head %}
+<title>Emotion Detector</title>
+<link
+  rel="stylesheet"
+  href="{{ url_for('static',filename='css/login.css') }}"
+/>
+{% endblock %} {% block body %}
+<div class="container">
+  <div class="title">Emotion Detector</div>
+  <div class="wrapper">
+    <div class="wrapper-1">
+      <div class="title-signup">Sign-Up</div>
+      <div class="form-signup">
+        <form class="signup" action="{{url_for('signup')}}" method="post">
+          <div class="text">
+            <input
+              type="text"
+              placeholder="Username"
+              name="username"
+              required
+              autocomplete="off"
+            />
+          </div>
+          <div class="text">
+            <input
+              type="email"
+              placeholder="Email"
+              name="email"
+              required
+              required
+              autocomplete="off"
+            />
+          </div>
+          <div class="text">
+            <input
+              type="password"
+              placeholder="Password"
+              name="password"
+              required
+              required
+              autocomplete="off"
+            />
+          </div>
+          <div class="text"><button type="submit">Create Account</button></div>
+        </form>
+      </div>
+    </div>
+    <div class="wrapper-2">
+      <div class="title-signin">Sign-In</div>
+      <div class="form-signin">
+        <form class="signin" action="{{url_for('signin')}}" method="post">
+          <div class="text">
+            <input
+              type="text"
+              placeholder="Username"
+              name="username"
+              required
+              required
+              autocomplete="off"
+            />
+          </div>
+          <div class="text">
+            <input
+              type="password"
+              placeholder="Password"
+              name="password"
+              required
+              required
+              autocomplete="off"
+            />
+          </div>
+          <div class="text"><button type="submit">Log In</button></div>
+        </form>
+      </div>
+    </div>
+  </div>
+  <div class="message">{{message}}</div>
+</div>
+{% endblock %}
