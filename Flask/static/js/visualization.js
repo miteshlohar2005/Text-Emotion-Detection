@@ -1,6 +1,7 @@
 /**
  * EmotionAI — Latent Emotion Topology Visualization
  * Continuous monochrome neural-network and emotion sphere animation engine.
+ * Coherent clockwise orbital rotation (75s per revolution) around stationary LSTM core.
  * Strict Palette: #000000 (Black) & #FFFFFF (White) with opacity modulation.
  */
 
@@ -21,8 +22,10 @@
       this.activeEmotion = null;
       this.activeConfidence = null;
       this.hoveredNode = null;
+      this.isPointerOver = false;
       this.mouse = { x: -1000, y: -1000 };
 
+      // Accessibility: Respect OS-level reduced motion preference
       this.reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       window.matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', (e) => {
         this.reducedMotion = e.matches;
@@ -32,100 +35,78 @@
       this.lastTimestamp = 0;
       this.animFrameId = null;
 
-      // Define the 5 emotion nodes with balanced pentagonal coordinates & expressions
+      // Rotation Configuration: 1 revolution every 75 seconds clockwise
+      this.rotationPeriod = 75; // seconds per full revolution (configurable)
+      this.rotationSpeed = 1.0; // speed multiplier (configurable)
+      this.rotationAngle = 0;   // cumulative rotation angle in radians
+      this.speedDampener = 1.0; // gentle pointer-hover deceleration factor
+
+      // The 5 Emotion Nodes in a balanced pentagonal constellation
+      // In clockwise sequence from top: JOY -> ANGER -> FEAR -> LOVE -> SADNESS
+      const stepAngle = (Math.PI * 2) / 5; // 72 degrees
+      const topAngle = -Math.PI / 2;       // -90 degrees (top position)
+
       this.nodes = [
         {
           id: 'joy',
           label: 'JOY',
           index: '01',
           role: 'POSITIVE VALENCE',
-          normX: 0.50,
-          normY: 0.20,
           radius: 34,
-          freqY: 0.0009,
-          ampY: 8,
-          phaseY: 0.0,
-          freqX: 0.0007,
-          ampX: 5,
-          phaseX: 1.2,
-          type: 'joy'
+          type: 'joy',
+          baseAngle: topAngle // Top
         },
         {
           id: 'sadness',
           label: 'SADNESS',
           index: '02',
           role: 'ATTENUATED INTENSITY',
-          normX: 0.22,
-          normY: 0.44,
           radius: 32,
-          freqY: 0.0007,
-          ampY: 9,
-          phaseY: 2.1,
-          freqX: 0.0008,
-          ampX: 6,
-          phaseX: 0.5,
-          type: 'sadness'
+          type: 'sadness',
+          baseAngle: topAngle + stepAngle * 4 // Upper-left
         },
         {
           id: 'anger',
           label: 'ANGER',
           index: '03',
           role: 'ACUTE TENSION',
-          normX: 0.78,
-          normY: 0.44,
           radius: 32,
-          freqY: 0.0011,
-          ampY: 7,
-          phaseY: 4.2,
-          freqX: 0.0006,
-          ampX: 6,
-          phaseX: 3.1,
-          type: 'anger'
+          type: 'anger',
+          baseAngle: topAngle + stepAngle * 1 // Upper-right
         },
         {
           id: 'love',
           label: 'LOVE',
           index: '04',
           role: 'AFFINITY RESONANCE',
-          normX: 0.28,
-          normY: 0.74,
           radius: 33,
-          freqY: 0.0008,
-          ampY: 8,
-          phaseY: 1.5,
-          freqX: 0.0009,
-          ampX: 5,
-          phaseX: 5.0,
-          type: 'love'
+          type: 'love',
+          baseAngle: topAngle + stepAngle * 3 // Lower-left
         },
         {
           id: 'fear',
           label: 'FEAR',
           index: '05',
           role: 'HYPER-VIGILANCE',
-          normX: 0.72,
-          normY: 0.74,
           radius: 32,
-          freqY: 0.0010,
-          ampY: 8,
-          phaseY: 3.4,
-          freqX: 0.0007,
-          ampX: 5,
-          phaseX: 2.8,
-          type: 'fear'
+          type: 'fear',
+          baseAngle: topAngle + stepAngle * 2 // Lower-right
         }
       ];
 
-      // Central Latent Representation Nexus
+      // Perimeter connectivity order for regular pentagon (indices into this.nodes)
+      this.perimeterOrder = [0, 2, 4, 3, 1]; // Joy -> Anger -> Fear -> Love -> Sadness
+
+      // Central Latent Representation Nexus (stationary LSTM core)
       this.centerHub = {
-        normX: 0.50,
-        normY: 0.48,
-        radius: 16
+        x: 0,
+        y: 0,
+        r: 16
       };
 
-      // Background ambient particles
+      // Network particles rotating synchronously with the composition
       this.particles = [];
-      this.initParticles(38);
+      this.initParticles(36);
 
       // Synaptic energy pulses traveling on edges
       this.pulses = [];
@@ -136,35 +117,46 @@
       this.start();
     }
 
+    /**
+     * Initializes network particles in polar coordinates around the center hub
+     * so they rotate coherently with the neural constellation.
+     */
     initParticles(count) {
       this.particles = [];
       for (let i = 0; i < count; i++) {
+        // Positioned across the orbital disk (0.35 to 1.32 of orbit radius)
+        const radiusFraction = 0.35 + Math.random() * 0.97;
         this.particles.push({
-          x: Math.random(),
-          y: Math.random(),
-          vx: (Math.random() - 0.5) * 0.00012,
-          vy: (Math.random() - 0.5) * 0.00012,
-          size: Math.random() * 1.6 + 0.6,
-          alpha: Math.random() * 0.35 + 0.1,
-          flickerRate: Math.random() * 0.002 + 0.001,
-          phase: Math.random() * Math.PI * 2
+          radiusFraction: radiusFraction,
+          baseAngle: Math.random() * Math.PI * 2,
+          radialWobbleAmp: Math.random() * 3 + 1,
+          radialWobbleFreq: Math.random() * 0.0012 + 0.0006,
+          radialPhase: Math.random() * Math.PI * 2,
+          size: Math.random() * 1.3 + 0.6,
+          alpha: Math.random() * 0.28 + 0.08,
+          flickerRate: Math.random() * 0.0016 + 0.0008,
+          flickerPhase: Math.random() * Math.PI * 2
         });
       }
     }
 
+    /**
+     * Synaptic pulses traveling along radial arms and clockwise perimeter edges.
+     */
     initPulses() {
-      // Continuous synaptic pulse signals with varied speeds
       this.pulses = [
-        { fromIdx: -1, toIdx: 0, progress: 0.1, speed: 0.0032 },
-        { fromIdx: -1, toIdx: 1, progress: 0.6, speed: 0.0026 },
-        { fromIdx: -1, toIdx: 2, progress: 0.3, speed: 0.0038 },
-        { fromIdx: -1, toIdx: 3, progress: 0.8, speed: 0.0028 },
-        { fromIdx: -1, toIdx: 4, progress: 0.45, speed: 0.0033 },
-        { fromIdx: 0, toIdx: 1, progress: 0.2, speed: 0.0024 },
-        { fromIdx: 1, toIdx: 3, progress: 0.7, speed: 0.0027 },
-        { fromIdx: 0, toIdx: 2, progress: 0.5, speed: 0.0030 },
-        { fromIdx: 2, toIdx: 4, progress: 0.15, speed: 0.0025 },
-        { fromIdx: 3, toIdx: 4, progress: 0.9, speed: 0.0021 }
+        // Radial pulses traveling from stationary center (-1) outward to nodes
+        { fromIdx: -1, toIdx: 0, progress: 0.12, speed: 0.0030 },
+        { fromIdx: -1, toIdx: 2, progress: 0.42, speed: 0.0034 },
+        { fromIdx: -1, toIdx: 4, progress: 0.70, speed: 0.0028 },
+        { fromIdx: -1, toIdx: 3, progress: 0.85, speed: 0.0032 },
+        { fromIdx: -1, toIdx: 1, progress: 0.58, speed: 0.0026 },
+        // Perimeter pulses circulating clockwise
+        { fromIdx: 0, toIdx: 2, progress: 0.22, speed: 0.0024 }, // Joy -> Anger
+        { fromIdx: 2, toIdx: 4, progress: 0.52, speed: 0.0026 }, // Anger -> Fear
+        { fromIdx: 4, toIdx: 3, progress: 0.82, speed: 0.0022 }, // Fear -> Love
+        { fromIdx: 3, toIdx: 1, progress: 0.15, speed: 0.0025 }, // Love -> Sadness
+        { fromIdx: 1, toIdx: 0, progress: 0.45, speed: 0.0023 }  // Sadness -> Joy
       ];
     }
 
@@ -180,16 +172,23 @@
         const rect = this.canvas.getBoundingClientRect();
         this.mouse.x = e.clientX - rect.left;
         this.mouse.y = e.clientY - rect.top;
+        this.isPointerOver = true;
         this.checkHover();
+      });
+
+      this.canvas.addEventListener('mouseenter', () => {
+        this.isPointerOver = true;
       });
 
       this.canvas.addEventListener('mouseleave', () => {
         this.mouse.x = -1000;
         this.mouse.y = -1000;
         this.hoveredNode = null;
+        this.isPointerOver = false;
+        this.canvas.style.cursor = 'default';
       });
 
-      // Allow clicking on an emotion sphere to insert sample prompt
+      // Clicking an emotion sphere dispatches event to insert sample prompt
       this.canvas.addEventListener('click', () => {
         if (this.hoveredNode) {
           const event = new CustomEvent('emotionNodeSelected', {
@@ -198,6 +197,21 @@
           window.dispatchEvent(event);
         }
       });
+    }
+
+    /**
+     * Configurable rotation controls
+     */
+    setRotationPeriod(seconds) {
+      if (typeof seconds === 'number' && seconds > 0) {
+        this.rotationPeriod = seconds;
+      }
+    }
+
+    setRotationSpeed(multiplier) {
+      if (typeof multiplier === 'number' && multiplier >= 0) {
+        this.rotationSpeed = multiplier;
+      }
     }
 
     resize() {
@@ -209,6 +223,8 @@
 
       this.width = newWidth;
       this.height = newHeight;
+
+      this.dpr = Math.min(window.devicePixelRatio || 1, 2);
 
       this.canvas.width = Math.floor(this.width * this.dpr);
       this.canvas.height = Math.floor(this.height * this.dpr);
@@ -225,29 +241,31 @@
     updateNodePositions() {
       const cx = this.width * 0.5;
       const cy = this.height * 0.48; // Centered with breathing room for bottom HUD
+
+      // Responsive proportional scaling
       const scale = Math.min(this.width / 520, this.height / 540);
-      const clampedScale = Math.min(Math.max(scale, 0.65), 1.15);
+      const clampedScale = Math.min(Math.max(scale, 0.50), 1.15);
 
       this.centerHub.x = cx;
       this.centerHub.y = cy;
-      this.centerHub.r = Math.max(15 * clampedScale, 11);
+      this.centerHub.r = Math.max(14 * clampedScale, 11);
       this.currentScale = clampedScale;
 
+      // Safe orbital radius that prevents clipping across all aspect ratios
+      const maxRadius = Math.min(this.width * 0.36, this.height * 0.32);
+      const orbitRadius = Math.max(Math.min(160 * clampedScale, maxRadius), 78);
+      this.orbitRadius = orbitRadius;
+
+      // Calculate rotated coordinates for each node
       this.nodes.forEach((node) => {
-        const baseOffsetX = (node.normX - 0.5) * (this.width * 0.78);
-        const baseOffsetY = (node.normY - 0.48) * (this.height * 0.74);
+        const angle = this.reducedMotion
+          ? node.baseAngle
+          : node.baseAngle + this.rotationAngle;
 
-        node.baseX = cx + baseOffsetX;
-        node.baseY = cy + baseOffsetY;
-        node.currentRadius = Math.max(node.radius * clampedScale, 20);
-
-        if (this.reducedMotion) {
-          node.x = node.baseX;
-          node.y = node.baseY;
-        } else {
-          node.x = node.baseX + Math.sin(this.time * node.freqX + node.phaseX) * node.ampX * clampedScale;
-          node.y = node.baseY + Math.sin(this.time * node.freqY + node.phaseY) * node.ampY * clampedScale;
-        }
+        node.x = cx + Math.cos(angle) * orbitRadius;
+        node.y = cy + Math.sin(angle) * orbitRadius;
+        node.angle = angle;
+        node.currentRadius = Math.max(node.radius * clampedScale, 19);
       });
     }
 
@@ -285,11 +303,21 @@
         const rawDelta = timestamp - this.lastTimestamp;
         this.lastTimestamp = timestamp;
 
-        // Cap delta to 100ms to avoid large jumps when tab is in background
+        // Cap delta to 100ms to avoid jumps when tab is throttled/switched
         const delta = Math.min(rawDelta, 100);
+
+        // Constant angular velocity: 2*PI radians in (rotationPeriod * 1000) ms
+        // At 75 seconds: (2 * Math.PI) / 75000 = ~0.000083776 rad/ms
+        const baseAngularVelocity = (Math.PI * 2) / (this.rotationPeriod * 1000);
+
+        // Subtle, calm deceleration when user hovers over canvas or node
+        const targetDampener = this.hoveredNode ? 0.35 : (this.isPointerOver ? 0.65 : 1.0);
+        this.speedDampener += (targetDampener - this.speedDampener) * Math.min(delta * 0.005, 1.0);
 
         if (!this.reducedMotion) {
           this.time += delta;
+          const angularDelta = baseAngularVelocity * this.rotationSpeed * this.speedDampener * delta;
+          this.rotationAngle = (this.rotationAngle + angularDelta) % (Math.PI * 2);
         }
 
         this.render(delta);
@@ -307,37 +335,40 @@
       const cx = this.centerHub.x;
       const cy = this.centerHub.y;
 
-      // 1. Deep Black Canvas Background
+      // 1. Deep Pure Black Canvas Background
       ctx.fillStyle = '#000000';
       ctx.fillRect(0, 0, w, h);
 
-      // 2. Technical Coordinate Grid & Crosshairs
+      // 2. Stationary Technical Coordinate Grid & Crosshairs
       this.drawTechnicalGrid(w, h);
 
-      // 3. Drifting Particle Cloud
-      this.drawParticles(w, h, delta);
-
-      // 4. Concentric Orbital Rings
+      // 3. Concentric Orbital Rings (rotating track + stationary reference frames)
       this.drawOrbitalRings(cx, cy);
 
-      // 5. Update and Calculate Node Float Coordinates
+      // 4. Rotating Network Particle Cloud
+      this.drawParticles(cx, cy);
+
+      // 5. Update Continuous Node Geometry
       this.updateNodePositions();
 
-      // 6. Neural Network Synaptic Connections & Traveling Energy Pulses
+      // 6. Neural Network Synaptic Edges & Traveling Pulses
       this.drawSynapticNetwork(delta);
 
-      // 7. Central Latent State Nexus Hub
+      // 7. Stationary Central LSTM Core Nexus
       this.drawLatentHub(cx, cy);
 
-      // 8. The 5 Emotion Spheres
+      // 8. The 5 Emotion Spheres (staying upright and readable)
       this.nodes.forEach((node) => {
         this.drawEmotionSphere(node);
       });
 
-      // 9. Technical HUD Telemetry Overlay
+      // 9. Stationary Technical Telemetry Overlay
       this.drawTelemetryOverlay(w, h);
     }
 
+    /**
+     * Stationary technical background grid with subtle crosshair intersections.
+     */
     drawTechnicalGrid(w, h) {
       const ctx = this.ctx;
       const step = 44;
@@ -360,8 +391,8 @@
         ctx.stroke();
       }
 
-      // Crosshairs at key intersections
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+      // Crosshairs at key grid intersections
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.10)';
       const crossStep = step * 3;
       for (let x = (w % crossStep) / 2; x < w; x += crossStep) {
         for (let y = (h % crossStep) / 2; y < h; y += crossStep) {
@@ -377,24 +408,28 @@
       ctx.restore();
     }
 
-    drawParticles(w, h, delta) {
+    /**
+     * Network particles that rotate in unison with the neural constellation.
+     */
+    drawParticles(cx, cy) {
       const ctx = this.ctx;
-      const deltaFactor = delta / 16.667;
+      const orbitR = this.orbitRadius;
       ctx.save();
 
       this.particles.forEach((p) => {
-        if (!this.reducedMotion) {
-          p.x += p.vx * deltaFactor;
-          p.y += p.vy * deltaFactor;
-          if (p.x < 0) p.x += 1;
-          if (p.x > 1) p.x -= 1;
-          if (p.y < 0) p.y += 1;
-          if (p.y > 1) p.y -= 1;
-        }
+        const angle = this.reducedMotion
+          ? p.baseAngle
+          : p.baseAngle + this.rotationAngle;
 
-        const px = p.x * w;
-        const py = p.y * h;
-        const flicker = 0.8 + 0.2 * Math.sin(this.time * p.flickerRate + p.phase);
+        const radialOffset = this.reducedMotion
+          ? 0
+          : Math.sin(this.time * p.radialWobbleFreq + p.radialPhase) * p.radialWobbleAmp;
+
+        const r = (p.radiusFraction * orbitR) + radialOffset;
+        const px = cx + Math.cos(angle) * r;
+        const py = cy + Math.sin(angle) * r;
+
+        const flicker = 0.8 + 0.2 * Math.sin(this.time * p.flickerRate + p.flickerPhase);
         const alpha = p.alpha * flicker;
 
         ctx.fillStyle = `rgba(255, 255, 255, ${alpha.toFixed(3)})`;
@@ -406,64 +441,72 @@
       ctx.restore();
     }
 
+    /**
+     * Concentric orbital paths: the primary track rotates synchronously
+     * with the nodes, while the inner guide and outer boundary provide stability.
+     */
     drawOrbitalRings(cx, cy) {
       const ctx = this.ctx;
-      const scale = this.currentScale || 1;
-      const r1 = 95 * scale;
-      const r2 = 165 * scale;
-      const r3 = 230 * scale;
-
-      const angle1 = this.reducedMotion ? 0 : this.time * 0.00028;
-      const angle2 = this.reducedMotion ? 0 : -this.time * 0.00018;
+      const rOrbit = this.orbitRadius;
+      const rInner = rOrbit * 0.58;
+      const rOuter = rOrbit * 1.36;
 
       ctx.save();
       ctx.translate(cx, cy);
 
-      // Inner dashed ring
-      ctx.rotate(angle1);
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+      // 1. Stationary Outer Technical Boundary Ring
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.035)';
       ctx.lineWidth = 1;
+      ctx.setLineDash([2, 8]);
+      ctx.beginPath();
+      ctx.arc(0, 0, rOuter, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // 2. Stationary Inner Concentric Ring framing LSTM core
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
       ctx.setLineDash([4, 6]);
       ctx.beginPath();
-      ctx.arc(0, 0, r1, 0, Math.PI * 2);
+      ctx.arc(0, 0, rInner, 0, Math.PI * 2);
       ctx.stroke();
 
-      // Middle technical ring with tick marks
-      ctx.rotate(-angle1);
-      ctx.rotate(angle2);
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
-      ctx.setLineDash([10, 12]);
+      // 3. Rotating Primary Orbital Track (rotates synchronously clockwise)
+      ctx.rotate(this.rotationAngle);
+
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([12, 10]);
       ctx.beginPath();
-      ctx.arc(0, 0, r2, 0, Math.PI * 2);
+      ctx.arc(0, 0, rOrbit, 0, Math.PI * 2);
       ctx.stroke();
 
-      // Cardinal degree ticks on middle ring
+      // Rotating Technical Cardinal & Pentagonal Alignment Ticks
       ctx.setLineDash([]);
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
-      const ticks = 8;
-      for (let i = 0; i < ticks; i++) {
-        const th = (i * Math.PI * 2) / ticks;
-        const x1 = Math.cos(th) * (r2 - 3.5);
-        const y1 = Math.sin(th) * (r2 - 3.5);
-        const x2 = Math.cos(th) * (r2 + 3.5);
-        const y2 = Math.sin(th) * (r2 + 3.5);
+      const totalTicks = 40;
+      for (let i = 0; i < totalTicks; i++) {
+        const th = (i * Math.PI * 2) / totalTicks;
+        const isMajorTick = i % 8 === 0;
+        const tickLength = isMajorTick ? 5 : 2.5;
+        const tickAlpha = isMajorTick ? 0.28 : 0.09;
+
+        ctx.strokeStyle = `rgba(255, 255, 255, ${tickAlpha})`;
+        const x1 = Math.cos(th) * (rOrbit - tickLength);
+        const y1 = Math.sin(th) * (rOrbit - tickLength);
+        const x2 = Math.cos(th) * (rOrbit + tickLength);
+        const y2 = Math.sin(th) * (rOrbit + tickLength);
+
         ctx.beginPath();
         ctx.moveTo(x1, y1);
         ctx.lineTo(x2, y2);
         ctx.stroke();
       }
 
-      // Outer delicate boundary ring
-      ctx.rotate(-angle2);
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.035)';
-      ctx.setLineDash([2, 8]);
-      ctx.beginPath();
-      ctx.arc(0, 0, r3, 0, Math.PI * 2);
-      ctx.stroke();
-
       ctx.restore();
     }
 
+    /**
+     * Radial synapses from center to nodes, perimeter pentagon edges,
+     * inner chords, and traveling energy pulses.
+     */
     drawSynapticNetwork(delta) {
       const ctx = this.ctx;
       const cx = this.centerHub.x;
@@ -472,33 +515,51 @@
 
       ctx.save();
 
-      // 1. Draw connecting splines from center to each node
+      // 1. Subtle Inner Chords (Pentagram Graph Depth)
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([1, 5]);
+      const chords = [
+        [0, 4], [0, 3], [1, 2], [1, 4], [2, 3]
+      ];
+      chords.forEach(([i1, i2]) => {
+        const n1 = this.nodes[i1];
+        const n2 = this.nodes[i2];
+        ctx.beginPath();
+        ctx.moveTo(n1.x, n1.y);
+        ctx.lineTo(n2.x, n2.y);
+        ctx.stroke();
+      });
+
+      // 2. Radial Synapses from Stationary Center to each Rotating Node
       this.nodes.forEach((node) => {
         const isActive = this.activeEmotion === node.id;
         const isHovered = this.hoveredNode === node;
 
         ctx.strokeStyle = isActive
-          ? 'rgba(255, 255, 255, 0.45)'
+          ? 'rgba(255, 255, 255, 0.55)'
           : isHovered
-          ? 'rgba(255, 255, 255, 0.32)'
+          ? 'rgba(255, 255, 255, 0.35)'
           : 'rgba(255, 255, 255, 0.10)';
-        ctx.lineWidth = isActive ? 1.5 : 1;
+        ctx.lineWidth = isActive ? 1.6 : 1;
         ctx.setLineDash(isActive ? [] : [2, 3]);
 
         ctx.beginPath();
         ctx.moveTo(cx, cy);
-        const mx = (cx + node.x) / 2 + (node.baseX - cx) * 0.06;
-        const my = (cy + node.y) / 2 + (node.baseY - cy) * 0.06;
-        ctx.quadraticCurveTo(mx, my, node.x, node.y);
+        ctx.lineTo(node.x, node.y);
         ctx.stroke();
       });
 
-      // 2. Draw inter-node perimeter links
+      // 3. Perimeter Pentagon Links between Adjacent Rotating Nodes
       ctx.setLineDash([]);
-      for (let i = 0; i < this.nodes.length; i++) {
-        const n1 = this.nodes[i];
-        const n2 = this.nodes[(i + 1) % this.nodes.length];
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+      for (let i = 0; i < this.perimeterOrder.length; i++) {
+        const n1 = this.nodes[this.perimeterOrder[i]];
+        const n2 = this.nodes[this.perimeterOrder[(i + 1) % this.perimeterOrder.length]];
+        const isConnectedToActive = (this.activeEmotion === n1.id || this.activeEmotion === n2.id);
+
+        ctx.strokeStyle = isConnectedToActive
+          ? 'rgba(255, 255, 255, 0.18)'
+          : 'rgba(255, 255, 255, 0.07)';
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(n1.x, n1.y);
@@ -506,19 +567,22 @@
         ctx.stroke();
       }
 
-      // 3. Render and advance traveling synaptic energy pulses
+      // 4. Traveling Synaptic Energy Pulses
       if (!this.reducedMotion) {
         this.pulses.forEach((pulse) => {
           pulse.progress += pulse.speed * deltaFactor;
           if (pulse.progress > 1) pulse.progress -= 1;
 
           let startX, startY, endX, endY;
+          let targetIsActive = false;
+
           if (pulse.fromIdx === -1) {
             startX = cx;
             startY = cy;
             const targetNode = this.nodes[pulse.toIdx];
             endX = targetNode.x;
             endY = targetNode.y;
+            targetIsActive = this.activeEmotion === targetNode.id;
           } else {
             const n1 = this.nodes[pulse.fromIdx];
             const n2 = this.nodes[pulse.toIdx];
@@ -526,19 +590,23 @@
             startY = n1.y;
             endX = n2.x;
             endY = n2.y;
+            targetIsActive = (this.activeEmotion === n1.id || this.activeEmotion === n2.id);
           }
 
           const t = pulse.progress;
           const px = startX + (endX - startX) * t;
           const py = startY + (endY - startY) * t;
 
-          const pulseAlpha = Math.sin(t * Math.PI) * 0.85;
+          const baseAlpha = Math.sin(t * Math.PI);
+          const alphaMultiplier = targetIsActive ? 0.95 : 0.65;
+          const pulseAlpha = baseAlpha * alphaMultiplier;
+
           ctx.fillStyle = `rgba(255, 255, 255, ${pulseAlpha.toFixed(3)})`;
           ctx.beginPath();
-          ctx.arc(px, py, 2.0, 0, Math.PI * 2);
+          ctx.arc(px, py, targetIsActive ? 2.4 : 1.8, 0, Math.PI * 2);
           ctx.fill();
 
-          ctx.strokeStyle = `rgba(255, 255, 255, ${(pulseAlpha * 0.3).toFixed(3)})`;
+          ctx.strokeStyle = `rgba(255, 255, 255, ${(pulseAlpha * 0.35).toFixed(3)})`;
           ctx.lineWidth = 1;
           ctx.beginPath();
           ctx.moveTo(px, py);
@@ -550,28 +618,31 @@
       ctx.restore();
     }
 
+    /**
+     * Stationary central LSTM nexus hub at (cx, cy).
+     */
     drawLatentHub(cx, cy) {
       const ctx = this.ctx;
       const r = this.centerHub.r;
-      const pulse = this.reducedMotion ? 1 : 0.88 + 0.12 * Math.sin(this.time * 0.0018);
+      const pulse = this.reducedMotion ? 1 : 0.90 + 0.10 * Math.sin(this.time * 0.0018);
 
       ctx.save();
       ctx.translate(cx, cy);
 
-      // Central core black disc
+      // Central core disc
       ctx.fillStyle = '#000000';
       ctx.beginPath();
       ctx.arc(0, 0, r, 0, Math.PI * 2);
       ctx.fill();
 
-      // Outer pulsating white ring
+      // Pulsating containment ring
       ctx.strokeStyle = `rgba(255, 255, 255, ${(0.38 * pulse).toFixed(3)})`;
       ctx.lineWidth = 1.1;
       ctx.beginPath();
       ctx.arc(0, 0, r * pulse, 0, Math.PI * 2);
       ctx.stroke();
 
-      // Inner wireframe reticle
+      // Fixed technical reticle crosshairs
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
       ctx.lineWidth = 1;
       ctx.beginPath();
@@ -581,21 +652,25 @@
       ctx.lineTo(0, r * 0.45);
       ctx.stroke();
 
-      // Central dot
+      // Central core dot
       ctx.fillStyle = '#ffffff';
       ctx.beginPath();
       ctx.arc(0, 0, 2.2, 0, Math.PI * 2);
       ctx.fill();
 
-      // Technical label below hub
+      // Stationary technical label below hub
       ctx.font = '8.5px "JetBrains Mono", monospace';
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.38)';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.42)';
       ctx.textAlign = 'center';
-      ctx.fillText('LSTM_h(t)', 0, r + 12);
+      ctx.fillText('LSTM_h(t)', 0, r + 13);
 
       ctx.restore();
     }
 
+    /**
+     * Renders each emotion sphere, its glyph, label, and score.
+     * Stays strictly upright and readable regardless of orbital position.
+     */
     drawEmotionSphere(node) {
       const ctx = this.ctx;
       const r = node.currentRadius;
@@ -603,11 +678,12 @@
       const isHovered = this.hoveredNode === node;
 
       ctx.save();
+      // Translate to node's position without rotating local coordinate frame
       ctx.translate(node.x, node.y);
 
-      // Concentric Resonance Wave if active or hovered
+      // 1. Concentric Resonance Wave if active or hovered
       if (isActive || isHovered) {
-        const waveScale = this.reducedMotion ? 1.25 : 1.08 + 0.22 * ((this.time * 0.0012) % 1);
+        const waveScale = this.reducedMotion ? 1.22 : 1.08 + 0.22 * ((this.time * 0.0012) % 1);
         const waveAlpha = this.reducedMotion ? 0.35 : 0.45 * (1 - ((this.time * 0.0012) % 1));
         ctx.strokeStyle = `rgba(255, 255, 255, ${waveAlpha.toFixed(3)})`;
         ctx.lineWidth = 1;
@@ -616,14 +692,14 @@
         ctx.stroke();
       }
 
-      // Base Sphere Fill with Realistic Monochrome Spherical Gradient
+      // 2. Base Sphere Fill with Realistic Monochrome Spherical Gradient
       const grad = ctx.createRadialGradient(
         -r * 0.32, -r * 0.32, r * 0.08,
         0, 0, r
       );
       grad.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
-      grad.addColorStop(0.2, 'rgba(255, 255, 255, 0.35)');
-      grad.addColorStop(0.6, 'rgba(255, 255, 255, 0.07)');
+      grad.addColorStop(0.22, 'rgba(255, 255, 255, 0.35)');
+      grad.addColorStop(0.62, 'rgba(255, 255, 255, 0.07)');
       grad.addColorStop(1, '#000000');
 
       ctx.fillStyle = '#000000';
@@ -636,7 +712,7 @@
       ctx.arc(0, 0, r, 0, Math.PI * 2);
       ctx.fill();
 
-      // Spherical Rim Contour
+      // 3. Spherical Rim Contour
       ctx.strokeStyle = isActive
         ? '#ffffff'
         : isHovered
@@ -647,29 +723,29 @@
       ctx.arc(0, 0, r, 0, Math.PI * 2);
       ctx.stroke();
 
-      // Subtle Orbital Ring around sphere
+      // 4. Subtle Orbital Ring around sphere
       ctx.save();
-      const ringAngle = this.reducedMotion ? 0.3 : (this.time * 0.0005 + node.phaseX);
+      const ringAngle = this.reducedMotion ? 0.3 : (this.time * 0.0005 + node.baseAngle);
       ctx.rotate(ringAngle);
-      ctx.strokeStyle = isActive ? 'rgba(255, 255, 255, 0.65)' : 'rgba(255, 255, 255, 0.2)';
+      ctx.strokeStyle = isActive ? 'rgba(255, 255, 255, 0.65)' : 'rgba(255, 255, 255, 0.20)';
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.ellipse(0, 0, r * 1.3, r * 0.42, 0, 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
 
-      // Minimalist Monochrome Expression Glyph
+      // 5. Minimalist Monochrome Expression Glyph (always upright)
       this.drawExpressionGlyph(node.type, r, isActive || isHovered);
 
-      // Scientific Label
+      // 6. Scientific Emotion Label (strictly upright and readable)
       ctx.font = '600 10.5px "JetBrains Mono", monospace';
-      ctx.fillStyle = isActive ? '#ffffff' : 'rgba(255, 255, 255, 0.85)';
+      ctx.fillStyle = isActive ? '#ffffff' : 'rgba(255, 255, 255, 0.88)';
       ctx.textAlign = 'center';
       ctx.fillText(node.label, 0, r + 14);
 
-      // Score / Index
+      // 7. Confidence Score or Node Index (strictly upright)
       ctx.font = '8px "JetBrains Mono", monospace';
-      ctx.fillStyle = isActive ? 'rgba(255, 255, 255, 0.9)' : 'rgba(255, 255, 255, 0.4)';
+      ctx.fillStyle = isActive ? 'rgba(255, 255, 255, 0.92)' : 'rgba(255, 255, 255, 0.42)';
       if (isActive && this.activeConfidence !== null) {
         ctx.fillText(`${this.activeConfidence.toFixed(1)}%`, 0, r + 24);
       } else {
@@ -679,6 +755,9 @@
       ctx.restore();
     }
 
+    /**
+     * Minimalist monochrome vector expression glyphs.
+     */
     drawExpressionGlyph(type, r, isEmphasized) {
       const ctx = this.ctx;
       ctx.save();
@@ -772,23 +851,27 @@
       ctx.restore();
     }
 
+    /**
+     * Stationary corner telemetry and real engine status overlay.
+     * No fabricated FPS or pseudo telemetry.
+     */
     drawTelemetryOverlay(w, h) {
       const ctx = this.ctx;
       ctx.save();
       ctx.font = '8.5px "JetBrains Mono", monospace';
       ctx.fillStyle = 'rgba(255, 255, 255, 0.38)';
 
-      // Header telemetry
+      // Header telemetry (stationary top-left)
       ctx.textAlign = 'left';
       ctx.fillText('// LATENT_TOPOLOGY_5D', 16, 20);
       ctx.fillText('STATUS: ONLINE', 16, 32);
 
-      // Top right telemetry
+      // Top right telemetry (stationary top-right)
       ctx.textAlign = 'right';
-      ctx.fillText('SAMPLING: CONTINUOUS', w - 16, 20);
-      ctx.fillText(`FPS: ~60 // ${(this.time * 0.001).toFixed(1)}s`, w - 16, 32);
+      ctx.fillText(`ROTATION: ${this.rotationPeriod.toFixed(1)}s // CW`, w - 16, 20);
+      ctx.fillText(`ELAPSED: ${(this.time * 0.001).toFixed(1)}s`, w - 16, 32);
 
-      // Node selection or prediction indicator cleanly positioned above the legend
+      // Node focus or active prediction indicator (stationary bottom-left)
       if (this.hoveredNode) {
         ctx.textAlign = 'left';
         ctx.fillStyle = '#ffffff';
