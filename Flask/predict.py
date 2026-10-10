@@ -1,6 +1,12 @@
 import numpy as np
 import pandas as pd
 from pathlib import Path
+import nltk
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+NLTK_DATA_DIR = PROJECT_ROOT / "nltk_data"
+
+nltk.data.path.insert(0, str(NLTK_DATA_DIR))
 
 
 import tensorflow as tf
