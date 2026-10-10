@@ -1,79 +1,313 @@
-{% extends 'base.html' %} {% block head %}
-<title>Text Emotion Detection</title>
+{% extends 'base.html' %}
+
+{% block head %}
+<title>EmotionAI — Production Text Emotion Detection</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}" />
-{% endblock %} {% block body %}
-<main class="container">
-  <section class="detector-card" aria-labelledby="page-title">
-    <p class="eyebrow">AI-powered text analysis</p>
-    <h1 id="page-title">Text Emotion Detection</h1>
-    <p class="subtitle">Discover the emotions expressed in your text using AI.</p>
+{% endblock %}
 
-    <form method="post" action="{{ url_for('predict') }}" id="prediction-form">
-      <label for="textfield">Your text</label>
-      <textarea
-        id="textfield"
-        name="textfield"
-        placeholder="Enter your text here..."
-        rows="7"
-        required
-      >{{ text or "" }}</textarea>
-      <div class="form-actions">
-        <button type="submit" class="primary-button" id="predict-button">
-          Predict Emotion
-        </button>
-        <button type="button" class="secondary-button" id="clear-button">Clear</button>
+{% block body %}
+<div class="app-container">
+
+  <!-- ======================================================================
+       LEFT PANEL: Continuous Emotion Visualization (42–45% Desktop)
+       ====================================================================== -->
+  <aside class="left-visualization-panel" id="visualization-panel" aria-label="Neural Emotion Topology Visualization">
+    <div class="canvas-wrapper">
+      <canvas id="neural-canvas"></canvas>
+      <div class="canvas-bottom-legend" aria-hidden="true">
+        <span class="legend-tag">
+          <span class="pulsing-dot"></span>
+          <span>LATENT TOPOLOGY // 5-CLASS</span>
+        </span>
+        <span class="legend-tag">
+          <span>LSTM RECURRENT MATRIX</span>
+        </span>
       </div>
-      <p class="loading" id="loading-message" aria-live="polite" hidden>
-        Analyzing your text...
-      </p>
-    </form>
+    </div>
+  </aside>
 
-    {% if error %}
-    <div class="message error-message" role="alert">{{ error }}</div>
-    {% endif %}
+  <!-- ======================================================================
+       RIGHT PANEL: Professional AI Workspace (55–58% Desktop)
+       ====================================================================== -->
+  <main class="right-workspace-panel" id="workspace-panel">
 
-    {% if result %}
-    <section class="result-card" aria-live="polite" aria-labelledby="result-title">
-      <p class="eyebrow">Prediction result</p>
-      <h2 id="result-title">{{ result.label }}</h2>
-      {% if result.confidence is not none %}
-      <p class="confidence">Model confidence: <strong>{{ "%.2f"|format(result.confidence) }}%</strong></p>
-      {% endif %}
-      <div class="scores">
-        {% for score in result.scores %}
-        <div class="score-row">
-          <span>{{ score.emotion }}</span>
-          <span>{{ "%.2f"|format(score.score) }}%</span>
+    <!-- Workspace Header -->
+    <header class="workspace-header">
+      <div class="brand-section">
+        <div class="brand-icon-wrapper" aria-hidden="true">
+          <svg class="brand-icon-svg" viewBox="0 0 24 24">
+            <!-- Minimal Monochrome Brain / Neural Graph Glyph -->
+            <path d="M12 2C8.5 2 6 4.5 6 8c0 1.2.3 2.3.9 3.2C5.3 12.1 4 13.9 4 16c0 3.3 2.7 6 6 6h4c3.3 0 6-2.7 6-6 0-2.1-1.3-3.9-2.9-4.8.6-.9.9-2 .9-3.2 0-3.5-2.5-6-6-6z" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M12 2v20M9 8h6M8 14h8M10 18h4" stroke-width="1.2" stroke-dasharray="2 2"/>
+            <circle cx="12" cy="8" r="1.5" fill="#ffffff"/>
+            <circle cx="9" cy="14" r="1.5" fill="#ffffff"/>
+            <circle cx="15" cy="14" r="1.5" fill="#ffffff"/>
+          </svg>
         </div>
-        {% endfor %}
+        <div class="brand-title">EmotionAI</div>
+        <span class="brand-badge">LSTM-v1.0</span>
       </div>
-    </section>
-    {% endif %}
-  </section>
-</main>
-<script>
-  const form = document.getElementById("prediction-form");
-  const input = document.getElementById("textfield");
-  const clearButton = document.getElementById("clear-button");
-  const loadingMessage = document.getElementById("loading-message");
-  const resultCard = document.querySelector(".result-card");
-  const errorMessage = document.querySelector(".error-message");
 
-  form.addEventListener("submit", (event) => {
-    if (!input.value.trim()) {
-      event.preventDefault();
-      input.focus();
-      return;
-    }
-    loadingMessage.hidden = false;
-  });
+      <nav class="header-nav" aria-label="Application Navigation">
+        <button type="button" class="nav-link-btn" data-modal-target="modal-overview">Overview</button>
+        <button type="button" class="nav-link-btn" data-modal-target="modal-how-it-works">How It Works</button>
+        <button type="button" class="nav-link-btn" data-modal-target="modal-model">Model</button>
+        <div class="status-indicator-chip" aria-label="System status online">
+          <span class="chip-dot" aria-hidden="true"></span>
+          <span>ONLINE</span>
+        </div>
+      </nav>
+    </header>
 
-  clearButton.addEventListener("click", () => {
-    input.value = "";
-    loadingMessage.hidden = true;
-    if (resultCard) resultCard.remove();
-    if (errorMessage) errorMessage.remove();
-    input.focus();
-  });
+    <!-- Workspace Body -->
+    <div class="workspace-content">
+
+      <!-- Main Heading Section -->
+      <section class="heading-section" aria-labelledby="main-title">
+        <p class="technical-eyebrow">AI-POWERED TEXT ANALYSIS</p>
+        <h1 class="primary-title" id="main-title">Understand the Emotion Behind Every Word.</h1>
+        <p class="supporting-text">Analyze written language with an LSTM-based emotion classification model.</p>
+      </section>
+
+      <!-- Quick Preset Prompt Chips -->
+      <section class="quick-samples-bar" aria-label="Sample input prompts">
+        <span class="samples-label">Test Prompts:</span>
+        <button type="button" class="sample-chip" data-sample="I just received the best news of my career and cannot stop smiling!">Joy</button>
+        <button type="button" class="sample-chip" data-sample="I feel so exhausted, lonely, and deeply disheartened by this loss.">Sadness</button>
+        <button type="button" class="sample-chip" data-sample="I am completely furious and tired of these constant disrespectful excuses.">Anger</button>
+        <button type="button" class="sample-chip" data-sample="I feel so deeply in love with my sweet family and thankful for each day.">Love</button>
+        <button type="button" class="sample-chip" data-sample="I am terrified of what might happen next in this threatening situation.">Fear</button>
+      </section>
+
+      <!-- Error Banner -->
+      <div id="error-banner" class="error-banner" role="alert" {% if not error %}hidden{% endif %}>
+        {{ error or "" }}
+      </div>
+
+      <!-- Text Input Workspace Card -->
+      <section class="input-workspace-card" aria-label="Text Input Panel">
+        <form method="post" action="{{ url_for('predict') }}" id="prediction-form" novalidate>
+          <div class="input-header-row">
+            <label for="textfield" class="input-label">INPUT TEXT</label>
+            <div class="counter-meta" aria-live="polite">
+              <span id="char-count">0 / 500</span>
+              <span id="word-count">0 words</span>
+            </div>
+          </div>
+
+          <div class="textarea-wrapper">
+            <textarea
+              id="textfield"
+              name="textfield"
+              class="code-textarea"
+              placeholder="Enter text to analyze..."
+              rows="3"
+              required
+              aria-required="true"
+              aria-label="Text to analyze for emotion classification"
+            >{{ text or "" }}</textarea>
+          </div>
+
+          <div class="form-actions-bar">
+            <span class="shortcut-hint">Press [Ctrl + Enter] to analyze</span>
+            <div class="action-buttons-group">
+              <button type="button" class="button-secondary" id="clear-button">
+                Clear
+              </button>
+              <button type="submit" class="button-primary" id="predict-button">
+                <span class="btn-spinner" hidden aria-hidden="true"></span>
+                <span class="btn-text">Analyze Emotion</span>
+                <svg class="btn-arrow-icon" viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="M3 8h10M9 4l4 4-4 4"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </form>
+      </section>
+
+      <!-- Prediction Results Panel -->
+      <section class="results-section" aria-label="Prediction Results Workspace">
+
+        <!-- Minimal Empty State -->
+        <div class="empty-state-box" id="empty-state" {% if result %}style="display: none;"{% endif %}>
+          <svg class="empty-vector-glyph" viewBox="0 0 48 48" aria-hidden="true">
+            <circle cx="24" cy="24" r="20" stroke-width="1.2" stroke-dasharray="3 3"/>
+            <circle cx="24" cy="24" r="8" stroke-width="1"/>
+            <line x1="24" y1="4" x2="24" y2="44" stroke-width="1" stroke-dasharray="2 4"/>
+            <line x1="4" y1="24" x2="44" y2="24" stroke-width="1" stroke-dasharray="2 4"/>
+          </svg>
+          <p class="empty-title">AWAITING TEXT SEQUENCE</p>
+          <p class="empty-desc">Enter text above and select 'Analyze Emotion' to evaluate neural activations across the 5 emotion classes.</p>
+        </div>
+
+        <!-- Dynamic Results Container -->
+        <div id="results-container" {% if not result %}hidden{% endif %}>
+          {% if result %}
+          <div class="results-card reveal-animation" id="active-results" aria-live="polite">
+            <div class="card-eyebrow-row">
+              <span class="technical-label">INFERENCE RESULT // 5-CLASS PROBABILITY DISTRIBUTION</span>
+              <span class="status-indicator-badge">EVALUATED</span>
+            </div>
+
+            <div class="primary-prediction-block">
+              <div class="prediction-header">
+                <span class="primary-emotion-label">{{ result.label }}</span>
+                {% if result.confidence is not none %}
+                <div class="confidence-tag">
+                  <span class="tag-title">ACTIVATION CONFIDENCE</span>
+                  <span class="tag-value">{{ "%.2f"|format(result.confidence) }}%</span>
+                </div>
+                {% endif %}
+              </div>
+              <p class="scientific-disclaimer">
+                Calculated via normalized softmax activation distribution outputted by the LSTM recurrent layer.
+              </p>
+            </div>
+
+            <div class="probability-distribution-grid" role="list" aria-label="Class probability distribution">
+              {% for score in result.scores %}
+              {% set is_winner = (score.emotion|lower == result.label|lower) %}
+              <div class="emotion-metric-row {% if is_winner %}metric-winner{% endif %}" role="listitem">
+                <div class="metric-meta">
+                  <span class="metric-name">
+                    {% if is_winner %}<span class="winner-indicator" aria-hidden="true">&#9658;</span>{% endif %}
+                    {{ score.emotion }}
+                  </span>
+                  <span class="metric-percent">{{ "%.2f"|format(score.score) }}%</span>
+                </div>
+                <div class="progress-track" role="progressbar" aria-valuenow="{{ score.score }}" aria-valuemin="0" aria-valuemax="100" aria-label="{{ score.emotion }} score">
+                  <div class="progress-bar-fill" style="width: {{ score.score }}%;"></div>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+
+            <div class="technical-footnote">
+              <span>SEQUENCE PADDING: 35 TOKENS</span>
+              <span>VOCABULARY FILTER: WORDNET LEMMATIZER</span>
+            </div>
+          </div>
+          {% endif %}
+        </div>
+
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<!-- ======================================================================
+     Technical Modals (Overview, How It Works, Model Specs)
+     ====================================================================== -->
+
+<!-- Overview Modal -->
+<div class="ai-modal" id="modal-overview" hidden role="dialog" aria-modal="true" aria-labelledby="overview-modal-title">
+  <div class="modal-backdrop"></div>
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <h2 class="modal-title" id="overview-modal-title">System Overview</h2>
+      <button type="button" class="modal-close" aria-label="Close modal">CLOSE [ESC]</button>
+    </div>
+    <div class="modal-body">
+      <p>
+        <strong>EmotionAI</strong> is a technical text classification platform engineered to detect affective states from unstructured natural language inputs.
+      </p>
+      <p>
+        The system evaluates sequence tokens against learned semantic representations to predict emotional valence across five core target classes: <em>Joy</em>, <em>Sadness</em>, <em>Anger</em>, <em>Love</em>, and <em>Fear</em>.
+      </p>
+      <p>
+        Designed with a strict monochrome engineering aesthetic, this workspace prioritizes computational transparency, probability distributions, and continuous latent space telemetry.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- How It Works Modal -->
+<div class="ai-modal" id="modal-how-it-works" hidden role="dialog" aria-modal="true" aria-labelledby="how-modal-title">
+  <div class="modal-backdrop"></div>
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <h2 class="modal-title" id="how-modal-title">Inference Pipeline</h2>
+      <button type="button" class="modal-close" aria-label="Close modal">CLOSE [ESC]</button>
+    </div>
+    <div class="modal-body">
+      <p>The NLP pipeline executes through five distinct computational stages:</p>
+      <ul class="modal-spec-list">
+        <li class="modal-spec-item">
+          <span class="spec-key">STAGE 01</span>
+          <span class="spec-val">Regex Sanitization &amp; Lowercasing</span>
+        </li>
+        <li class="modal-spec-item">
+          <span class="spec-key">STAGE 02</span>
+          <span class="spec-val">NLTK Word Tokenization</span>
+        </li>
+        <li class="modal-spec-item">
+          <span class="spec-key">STAGE 03</span>
+          <span class="spec-val">Stopwords &amp; WordNet Lemmatization</span>
+        </li>
+        <li class="modal-spec-item">
+          <span class="spec-key">STAGE 04</span>
+          <span class="spec-val">Keras Post-Padding (Max Len = 35)</span>
+        </li>
+        <li class="modal-spec-item">
+          <span class="spec-key">STAGE 05</span>
+          <span class="spec-val">Recurrent LSTM &amp; Softmax Activation</span>
+        </li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- Model Specs Modal -->
+<div class="ai-modal" id="modal-model" hidden role="dialog" aria-modal="true" aria-labelledby="model-modal-title">
+  <div class="modal-backdrop"></div>
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <h2 class="modal-title" id="model-modal-title">Model Specifications</h2>
+      <button type="button" class="modal-close" aria-label="Close modal">CLOSE [ESC]</button>
+    </div>
+    <div class="modal-body">
+      <p>Architecture parameters extracted from the trained serialization artifacts:</p>
+      <ul class="modal-spec-list">
+        <li class="modal-spec-item">
+          <span class="spec-key">FRAMEWORK</span>
+          <span class="spec-val">TensorFlow / Keras</span>
+        </li>
+        <li class="modal-spec-item">
+          <span class="spec-key">NETWORK TYPE</span>
+          <span class="spec-val">LSTM (Long Short-Term Memory)</span>
+        </li>
+        <li class="modal-spec-item">
+          <span class="spec-key">SEQUENCE LENGTH</span>
+          <span class="spec-val">35 Timesteps (Post-padded)</span>
+        </li>
+        <li class="modal-spec-item">
+          <span class="spec-key">TARGET CLASSES</span>
+          <span class="spec-val">5 (Anger, Fear, Joy, Love, Sadness)</span>
+        </li>
+        <li class="modal-spec-item">
+          <span class="spec-key">ACTIVATION</span>
+          <span class="spec-val">Softmax Probability Distribution</span>
+        </li>
+        <li class="modal-spec-item">
+          <span class="spec-key">TOKENIZER ENCODING</span>
+          <span class="spec-val">Pickle Word Tokenizer</span>
+        </li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- Serialized initial result (if rendered via server-side POST) -->
+{% if result %}
+<script id="initial-result-data" type="application/json">
+  {{ result | tojson | safe }}
 </script>
+{% endif %}
+
+<!-- Application Scripts -->
+<script src="{{ url_for('static', filename='js/visualization.js') }}"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+
 {% endblock %}
