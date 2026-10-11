@@ -72,26 +72,26 @@ class Emotion_Detector():
         return padded_vector
     
     
-def predict(self, text):
-    vector = self.string_to_vector(text)
+    def predict(self, text):
+        vector = self.string_to_vector(text)
 
     # Run the model directly in inference mode
-    output = self.lstm_model(vector, training=False)
-    out = output.numpy()
+        output = self.lstm_model(vector, training=False)
+        out = output.numpy()
 
-    probabilities = out[0]
-    answer = int(np.argmax(probabilities))
-    predicted_emotion = self.encoder.inverse_transform([answer])[0]
+        probabilities = out[0]
+        answer = int(np.argmax(probabilities))
+        predicted_emotion = self.encoder.inverse_transform([answer])[0]
 
-    emoji = [" 😠", " 😱", " 😃", " 🥰", " 😢"]
-    ans_dict = {}
+        emoji = [" 😠", " 😱", " 😃", " 🥰", " 😢"]
+        ans_dict = {}
 
-    total = np.sum(probabilities)
-    if total <= 0:
-        raise ValueError("The model returned invalid prediction scores.")
+        total = np.sum(probabilities)
+        if total <= 0:
+            raise ValueError("The model returned invalid prediction scores.")
 
-    for i, emotion in enumerate(self.encoder.classes_):
-        label = str(emotion) + emoji[i]
-        ans_dict[label] = float(probabilities[i] / total * 100)
+        for i, emotion in enumerate(self.encoder.classes_):
+            label = str(emotion) + emoji[i]
+            ans_dict[label] = float(probabilities[i] / total * 100)
 
-    return predicted_emotion, ans_dict
+        return predicted_emotion, ans_dict
